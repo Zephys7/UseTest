@@ -195,10 +195,10 @@
   </a>
   <script>
     // ==================================================================
-    //          SCRIPT FINAL E UNIFICADO - USE FRAN SEMIJOIAS
+    //    SCRIPT VERDADEIRAMENTE FINAL E UNIFICADO - USE FRAN SEMIJOIAS
     // ==================================================================
 
-    // --- FUNÇÕES GLOBAIS (não dependem dos produtos) ---
+    // --- FUNÇÕES GLOBAIS (disponíveis para todas as páginas) ---
     function toggleMenu() {
       document.getElementById('sidebar').classList.toggle('active');
       document.getElementById('overlay').classList.toggle('active');
@@ -211,10 +211,12 @@
     const saveCart = (cart) => localStorage.setItem('usefran_cart', JSON.stringify(cart));
     const updateCartCounter = () => {
       const cartCounter = document.getElementById('cart-item-count');
-      if (cartCounter) cartCounter.textContent = getCart().length;
+      if (cartCounter) {
+        cartCounter.textContent = getCart().length;
+      }
     };
 
-    // --- LÓGICA PRINCIPAL ---
+    // --- LÓGICA PRINCIPAL (executada após o carregamento da página) ---
     document.addEventListener('DOMContentLoaded', () => {
       // 1. Atualiza o contador do carrinho em TODAS as páginas, logo de cara.
       updateCartCounter();
@@ -222,15 +224,13 @@
       // 2. Busca os produtos do arquivo JSON. Esta é a única fonte de dados.
       fetch('produtos.json')
         .then(response => {
-          if (!response.ok) {
-            throw new Error(`Erro de rede! Status: ${response.status}`);
-          }
+          if (!response.ok) { throw new Error(`Erro de rede! Status: ${response.status}`); }
           return response.json();
         })
         .then(produtos => {
           // 3. DEPOIS QUE OS PRODUTOS SÃO CARREGADOS, ATIVA A LÓGICA DA PÁGINA ATUAL
 
-          // Lógica para a PÁGINA DE PRODUTO
+          // LÓGICA PARA A PÁGINA DE PRODUTO
           const productDetailContainer = document.getElementById('product-detail-main');
           if (productDetailContainer) {
             const params = new URLSearchParams(window.location.search);
@@ -272,16 +272,16 @@
             }
           }
 
-          // Lógica para as PÁGINAS DE CATEGORIA (com filtro)
+          // LÓGICA PARA AS PÁGINAS DE CATEGORIA (com filtro)
           const categoryPageGrid = document.querySelector('.product-grid');
           if (categoryPageGrid && document.getElementById('sort-filter')) {
             const searchInput = document.querySelector('.search-bar input');
             const sortFilter = document.getElementById('sort-filter');
             const productCards = Array.from(categoryPageGrid.querySelectorAll('.product-card'));
             
-            function normalizeString(str) { return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+            const normalizeString = (str) => str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-            function filterAndSortProducts() {
+            const filterAndSortProducts = () => {
               const searchTerm = normalizeString(searchInput.value);
               const sortValue = sortFilter.value;
               let filteredProducts = productCards.filter(card => {
@@ -298,14 +298,14 @@
               });
               categoryPageGrid.innerHTML = '';
               filteredProducts.forEach(card => categoryPageGrid.appendChild(card));
-            }
+            };
             searchInput.addEventListener('input', filterAndSortProducts);
             sortFilter.addEventListener('change', filterAndSortProducts);
           }
 
-          // Lógica para a PÁGINA DO CARRINHO
-          const cartContainer = document.getElementById('cart-items-container');
-          if (cartContainer) {
+          // LÓGICA PARA A PÁGINA DO CARRINHO
+          const cartItemsContainer = document.getElementById('cart-items-container');
+          if (cartItemsContainer) {
             const emptyCartMessage = document.getElementById('empty-cart-message');
             const cartSummaryBox = document.getElementById('cart-summary-box');
             const cartTotalEl = document.getElementById('cart-total');
@@ -323,21 +323,54 @@
                 cartSummaryBox.style.display = 'block';
                 cart.forEach((item, index) => {
                   total += item.preco;
-                  cartItemsContainer.innerHTML += `<div class="cart-item">...</div>`; // (seu HTML do item do carrinho)
+                  cartItemsContainer.innerHTML += `
+                    <div class="cart-item">
+                      <img src="${item.imagem}" alt="${item.nome}">
+                      <div class="cart-item-info">
+                        <h3>${item.nome}</h3>
+                        <p>R$ ${item.preco.toFixed(2).replace('.', ',')}</p>
+                      </div>
+                      <button class="remove-btn" data-index="${index}" title="Remover item">X</button>
+                    </div>
+                  `;
                 });
               }
               cartTotalEl.textContent = `Total: R$ ${total.toFixed(2).replace('.', ',')}`;
             };
             
-            // ... (resto da lógica do carrinho que já funciona para você)
-          }
+            cartItemsContainer.addEventListener('click', (event) => {
+              if (event.target.classList.contains('remove-btn')) {
+                const itemIndex = parseInt(event.target.dataset.index, 10);
+                cart.splice(itemIndex, 1);
+                saveCart(cart);
+                renderCart();
+                updateCartCounter();
+              }
+            });
+            
+            checkoutBtn.addEventListener('click', () => {
+                if (cart.length === 0) return;
+                let mensagem = "Olá! Gostaria de encomendar os seguintes itens:\n\n";
+                let totalPedido = 0;
+                cart.forEach(item => {
+                    mensagem += `- ${item.nome} (R$ ${item.preco.toFixed(2).replace('.', ',')})\n`;
+                    totalPedido += item.preco;
+                });
+                mensagem += `\n*Total do Pedido: R$ ${totalPedido.toFixed(2).replace('.', ',')}*`;
+                mensagem += `\n\nAguardo o contato para combinar a entrega e o pagamento.`;
+                const seuNumero = '5569123456789'; // SUBSTITUA PELO SEU NÚMERO
+                const linkWhatsapp = `https://wa.me/${seuNumero}?text=${encodeURIComponent(mensagem)}`;
+                window.open(linkWhatsapp, '_blank');
+            });
 
+            renderCart();
+          }
         })
         .catch(error => {
           console.error('ERRO CRÍTICO: Não foi possível carregar ou processar o arquivo de produtos.', error);
           alert('Ocorreu um erro ao carregar os produtos. Por favor, recarregue a página.');
         });
     });
-          </script>
+  </script>
 </body>
-</html>
+  </html>
