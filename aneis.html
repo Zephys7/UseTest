@@ -194,7 +194,11 @@
     <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/240px-WhatsApp.svg.png" alt="Fale Conosco pelo WhatsApp">
   </a>
   <script>
-    // --- FUNÇÕES DO MENU LATERAL (não mudam) ---
+    // ==================================================================
+    //          SCRIPT FINAL E UNIFICADO - USE FRAN SEMIJOIAS
+    // ==================================================================
+
+    // --- FUNÇÕES GLOBAIS (não dependem dos produtos) ---
     function toggleMenu() {
       document.getElementById('sidebar').classList.toggle('active');
       document.getElementById('overlay').classList.toggle('active');
@@ -203,36 +207,29 @@
       document.getElementById('sidebar').classList.remove('active');
       document.getElementById('overlay').classList.remove('active');
     }
-
-    // --- FUNÇÕES DO CARRINHO (agora recebem a lista de produtos) ---
     const getCart = () => JSON.parse(localStorage.getItem('usefran_cart')) || [];
     const saveCart = (cart) => localStorage.setItem('usefran_cart', JSON.stringify(cart));
     const updateCartCounter = () => {
       const cartCounter = document.getElementById('cart-item-count');
       if (cartCounter) cartCounter.textContent = getCart().length;
     };
-    const addToCart = (productId, allProducts) => {
-      const cart = getCart();
-      const productToAdd = allProducts.find(p => p.id === productId);
-      if (productToAdd) {
-        cart.push(productToAdd);
-        saveCart(cart);
-        updateCartCounter();
-        alert(`"${productToAdd.nome}" foi adicionado ao carrinho!`);
-      } else { alert('Erro: Produto não encontrado.'); }
-    };
 
     // --- LÓGICA PRINCIPAL ---
     document.addEventListener('DOMContentLoaded', () => {
-      updateCartCounter(); // Atualiza o contador assim que a página carrega
+      // 1. Atualiza o contador do carrinho em TODAS as páginas, logo de cara.
+      updateCartCounter();
 
-      // Busca os produtos do arquivo JSON
+      // 2. Busca os produtos do arquivo JSON. Esta é a única fonte de dados.
       fetch('produtos.json')
-        .then(response => response.json())
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Erro de rede! Status: ${response.status}`);
+          }
+          return response.json();
+        })
         .then(produtos => {
-          // QUANDO OS PRODUTOS SÃO CARREGADOS COM SUCESSO,
-          // RODA A LÓGICA ESPECÍFICA DA PÁGINA
-          
+          // 3. DEPOIS QUE OS PRODUTOS SÃO CARREGADOS, ATIVA A LÓGICA DA PÁGINA ATUAL
+
           // Lógica para a PÁGINA DE PRODUTO
           const productDetailContainer = document.getElementById('product-detail-main');
           if (productDetailContainer) {
@@ -243,31 +240,104 @@
             if (produto) {
               document.title = `${produto.nome} - usefransemijoias`;
               document.getElementById('product-name').textContent = produto.nome;
-              // ... (resto da lógica da página de produto)
+              document.getElementById('product-price').textContent = `R$ ${produto.preco.toFixed(2).replace('.', ',')}`;
+              document.getElementById('product-image').src = produto.imagem;
+              document.getElementById('product-image').alt = produto.nome;
+              document.getElementById('product-description').textContent = produto.descricao;
+
               const addToCartButton = document.getElementById('add-to-cart-button');
-              addToCartButton.addEventListener('click', () => { addToCart(produto.id, produtos); });
-              // ... (resto da lógica dos botões)
+              const buyNowButton = document.getElementById('buy-now-button');
+              const seuNumero = '5569123456789'; // SUBSTITUA PELO SEU NÚMERO
+
+              const addToCart = (id) => {
+                const cart = getCart();
+                const productToAdd = produtos.find(p => p.id === id);
+                if (productToAdd) {
+                  cart.push(productToAdd);
+                  saveCart(cart);
+                  updateCartCounter();
+                  alert(`"${productToAdd.nome}" foi adicionado ao carrinho!`);
+                }
+              };
+
+              addToCartButton.addEventListener('click', () => { addToCart(produto.id); });
+              buyNowButton.addEventListener('click', () => {
+                const mensagem = encodeURIComponent(`Olá! Tenho interesse na semijoia (compra rápida): ${produto.nome}`);
+                const whatsappLink = `https://wa.me/${seuNumero}?text=${mensagem}`;
+                window.open(whatsappLink, '_blank');
+              });
+            } else {
+              productDetailContainer.style.display = 'none';
+              document.getElementById('error-message').style.display = 'block';
             }
           }
-          
-          // Lógica para as PÁGINAS DE CATEGORIA (filtro)
-          const categoryPage = document.querySelector('.product-grid');
-          if (categoryPage && document.getElementById('sort-filter')) {
-              // ... (toda a sua lógica de filtro vai aqui, usando a variável 'produtos')
+
+          // Lógica para as PÁGINAS DE CATEGORIA (com filtro)
+          const categoryPageGrid = document.querySelector('.product-grid');
+          if (categoryPageGrid && document.getElementById('sort-filter')) {
+            const searchInput = document.querySelector('.search-bar input');
+            const sortFilter = document.getElementById('sort-filter');
+            const productCards = Array.from(categoryPageGrid.querySelectorAll('.product-card'));
+            
+            function normalizeString(str) { return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+
+            function filterAndSortProducts() {
+              const searchTerm = normalizeString(searchInput.value);
+              const sortValue = sortFilter.value;
+              let filteredProducts = productCards.filter(card => {
+                const title = normalizeString(card.querySelector('h3').textContent);
+                return title.includes(searchTerm);
+              });
+              filteredProducts.sort((a, b) => {
+                switch (sortValue) {
+                  case 'price-asc': return parseFloat(a.dataset.price) - parseFloat(b.dataset.price);
+                  case 'price-desc': return parseFloat(b.dataset.price) - parseFloat(a.dataset.price);
+                  case 'newest': return new Date(b.dataset.date) - new Date(a.dataset.date);
+                  default: return productCards.indexOf(a) - productCards.indexOf(b);
+                }
+              });
+              categoryPageGrid.innerHTML = '';
+              filteredProducts.forEach(card => categoryPageGrid.appendChild(card));
+            }
+            searchInput.addEventListener('input', filterAndSortProducts);
+            sortFilter.addEventListener('change', filterAndSortProducts);
           }
 
           // Lógica para a PÁGINA DO CARRINHO
-          const cartContainer = document.querySelector('.cart-container');
-          if (cartContainer && document.getElementById('cart-items-container')) {
-              // ... (toda a sua lógica da página de carrinho vai aqui)
+          const cartContainer = document.getElementById('cart-items-container');
+          if (cartContainer) {
+            const emptyCartMessage = document.getElementById('empty-cart-message');
+            const cartSummaryBox = document.getElementById('cart-summary-box');
+            const cartTotalEl = document.getElementById('cart-total');
+            const checkoutBtn = document.getElementById('checkout-whatsapp-btn');
+            let cart = getCart();
+            
+            const renderCart = () => {
+              cartItemsContainer.innerHTML = '';
+              let total = 0;
+              if (cart.length === 0) {
+                emptyCartMessage.style.display = 'block';
+                cartSummaryBox.style.display = 'none';
+              } else {
+                emptyCartMessage.style.display = 'none';
+                cartSummaryBox.style.display = 'block';
+                cart.forEach((item, index) => {
+                  total += item.preco;
+                  cartItemsContainer.innerHTML += `<div class="cart-item">...</div>`; // (seu HTML do item do carrinho)
+                });
+              }
+              cartTotalEl.textContent = `Total: R$ ${total.toFixed(2).replace('.', ',')}`;
+            };
+            
+            // ... (resto da lógica do carrinho que já funciona para você)
           }
 
         })
         .catch(error => {
-          console.error('Erro ao carregar o arquivo de produtos:', error);
-          alert('Não foi possível carregar os produtos. Tente recarregar a página.');
+          console.error('ERRO CRÍTICO: Não foi possível carregar ou processar o arquivo de produtos.', error);
+          alert('Ocorreu um erro ao carregar os produtos. Por favor, recarregue a página.');
         });
     });
-  </script>
+          </script>
 </body>
 </html>
